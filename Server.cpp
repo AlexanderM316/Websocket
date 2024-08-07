@@ -1,14 +1,8 @@
 #include "Server.h"
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
-#include <QWebSocket>
 
 Server::Server(quint16 port, QObject *parent)
-    : QObject(parent),
-      m_pWebSocketServer(new QWebSocketServer(QStringLiteral("JSON-RPC Server"), QWebSocketServer::NonSecureMode, this)),
+    : QObject(parent), m_pWebSocketServer(new QWebSocketServer(QStringLiteral("JSON-RPC Server"), QWebSocketServer::NonSecureMode, this)),
       objectManager(new ObjectManager()) {
-
     if (m_pWebSocketServer->listen(QHostAddress::Any, port)) {
         connect(m_pWebSocketServer, &QWebSocketServer::newConnection, this, &Server::onNewConnection);
         qDebug() << "Server listening on port:" << port;
@@ -17,20 +11,18 @@ Server::Server(quint16 port, QObject *parent)
 
 void Server::onNewConnection() {
     QWebSocket *socket = m_pWebSocketServer->nextPendingConnection();
-
     connect(socket, &QWebSocket::textMessageReceived, this, &Server::onMessageReceived);
     connect(socket, &QWebSocket::disconnected, this, &Server::onSocketDisconnected);
 }
 
 void Server::onMessageReceived(const QString &message) {
-    QWebSocket *client = qobject_cast<QWebSocket*>(sender());
+    QWebSocket *client = qobject_cast<QWebSocket *>(sender());
     if (!client) {
-        return; // If sender is not a QWebSocket, exit the function.
+        return;
     }
-
     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
     if (doc.isNull() || !doc.isObject()) {
-        return sendError(client, -32700, "Parse error", QJsonValue()); // Invalid JSON
+        return sendError(client, -32700, "Parse error", QJsonValue());
     }
 
     QJsonObject json = doc.object();
@@ -39,17 +31,15 @@ void Server::onMessageReceived(const QString &message) {
     QJsonValue params = json["params"];
     QJsonValue id = json["id"];
 
-    // Check if jsonrpc is correct
     if (jsonrpc != "2.0") {
-        return sendError(client, -32600, "Invalid Request", id); // Invalid JSON-RPC request
+        return sendError(client, -32600, "Invalid Request", id);
     }
 
     QJsonObject result;
 
-    // Handle methods
     if (method == "createObject") {
         if (!params.isObject() || !params["name"].isString()) {
-            return sendError(client, -32602, "Invalid params", id); // Invalid params
+            return sendError(client, -32602, "Invalid params", id);
         }
         QString name = params["name"].toString();
         objectManager->createObject(name);
@@ -63,25 +53,54 @@ void Server::onMessageReceived(const QString &message) {
             objects.append(objJson);
         }
         result["result"] = objects;
+    } else if (method == "updateObject") {
+        if (!params.isObject() || !params["id"].isDouble() || !params["name"].isString()) {
+            return sendError(client, -32602, "Invalid params", id);
+        }
+        int id = params["id"].toInt();
+        QString name = params["name"].toString();
+        objectManager->updateObject(id, name);
+        result["result"] = "Object updated";
+    } else if (method == "deleteObject") {
+        if (!params.isObject() || !params["id"].isDouble()) {
+            return sendError(client, -32602, "Invalid params", id);
+        }
+        int id = params["id"].toInt();
+        objectManager->deleteObject(id);
+        result["result"] = "Object deleted";
+    } else if (method == "addDynamicProperty") {
+        if (!params.isObject() || !params["id"].isDouble() || !params["key"].isString()) {
+            return sendError(client, -32602, "Invalid params", id);
+        }
+        int id = params["id"].toInt();
+        QString key = params["key"].toString();
+        QVariant value = params["value"].toVariant();
+        objectManager->addDynamicProperty(id, key, value);
+        result["result"] = "Dynamic property added";
+    } else if (method == "addChildObject") {
+        if (!params.isObject() || !params["parentId"].isDouble() || !params["childName"].isString()) {
+            return sendError(client, -32602, "Invalid params", id);
+        }
+        int parentId = params["parentId"].toInt();
+        QString childName = params["childName"].toString();
+        objectManager->addChildObject(parentId, childName);
+        result["result"] = "Child object added";
     } else {
-        return sendError(client, -32601, "Method not found", id); // Method not found
+        return sendError(client, -32601, "Method not found", id);
     }
 
-    // Send response
     result["jsonrpc"] = "2.0";
-    result["id"] = id; // Echo the request ID
+    result["id"] = id;
+
     client->sendTextMessage(QJsonDocument(result).toJson(QJsonDocument::Compact));
 }
 
 void Server::sendError(QWebSocket *client, int code, const QString &message, const QJsonValue &id) {
     QJsonObject error;
     error["jsonrpc"] = "2.0";
-    error["error"] = QJsonObject{
-        {"code", code},
-        {"message", message}
-    };
+    error["error"] = QJsonObject{{"code", code}, {"message", message}};
     if (!id.isNull()) {
-        error["id"] = id; // Include the id in the error response
+        error["id"] = id;
     }
     client->sendTextMessage(QJsonDocument(error).toJson(QJsonDocument::Compact));
 }

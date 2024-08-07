@@ -1,11 +1,12 @@
 #ifndef SERVER_H
 #define SERVER_H
 
+#include <QObject>
 #include <QWebSocketServer>
 #include <QWebSocket>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonArray>
+#include <QDebug>
 #include "ObjectManager.h"
 
 class Server : public QObject {

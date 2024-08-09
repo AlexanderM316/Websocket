@@ -6,6 +6,8 @@ Server::Server(quint16 port, QObject *parent)
     if (m_pWebSocketServer->listen(QHostAddress::Any, port)) {
         connect(m_pWebSocketServer, &QWebSocketServer::newConnection, this, &Server::onNewConnection);
         qDebug() << "Server listening on port:" << port;
+    } else {
+         qDebug() << "Server failed to start:" << m_pWebSocketServer->errorString();
     }
 }
 

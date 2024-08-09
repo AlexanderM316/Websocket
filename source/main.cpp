@@ -4,6 +4,6 @@
 int main(int argc, char *argv[]) {
     QCoreApplication a(argc, argv);
 
-    Server server(12345); // Укажите желаемый порт
+    Server server(23456); // Укажите желаемый порт
     return a.exec();
 }
